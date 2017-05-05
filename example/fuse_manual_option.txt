@@ -1,0 +1,47 @@
+int ret = -1;
+struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+struct fuse* fu;
+struct fuse_session *se;
+struct fuse_cmdline_opts opts;
+fuse_opt_add_opt(NULL,"-t");
+
+if (fuse_parse_cmdline(&args, &opts) != 0)
+        return 1;
+if (opts.show_help) {
+        printf("usage: %s [options] <mountpoint>\n\n", argv[0]);
+        fuse_cmdline_help();
+        fuse_lowlevel_help();
+        ret = 0;
+        goto err_out0;
+} else if (opts.show_version) {
+        printf("FUSE library version %s\n", fuse_pkgversion());
+        fuse_lowlevel_version();
+        ret = 0;
+        goto err_out0;
+}
+fu = fuse_new(&args,&xmp_oper,sizeof(xmp_oper),NULL);
+se = fuse_get_session(fu);
+if (fu == NULL)
+    goto err_out1;
+if (se == NULL)
+    goto err_out1;
+if (fuse_set_signal_handlers(se) != 0)
+    goto err_out2;
+if (fuse_mount(fu, opts.mountpoint) != 0)
+    goto err_out3;
+fuse_daemonize(opts.foreground);
+/* Block until ctrl+c or fusermount -u */
+if (opts.singlethread)
+        ret = fuse_loop(fu);
+else
+        ret = fuse_loop_mt(fu, opts.clone_fd);
+fuse_unmount(fu);
+err_out3:
+fuse_remove_signal_handlers(se);
+err_out2:
+fuse_destroy(fu);
+err_out1:
+free(opts.mountpoint);
+err_out0:
+fuse_opt_free_args(&args);
+return ret ?  0 : 1;
